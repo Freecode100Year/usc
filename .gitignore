@@ -1,0 +1,6 @@
+bin/
+*.exe
+dist/
+*.usctrace
+.DS_Store
+Thumbs.db
