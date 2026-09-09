@@ -15,6 +15,8 @@ import (
 	"github.com/Freecode100Year/usc/usc-core/replay"
 )
 
+const appVersion = "0.1.3"
+
 func main() {
 	if len(os.Args) < 2 {
 		printUsage()
@@ -26,7 +28,7 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Println("USC (Universal Skill Compiler) v0.1.2")
+	fmt.Printf("USC (Universal Skill Compiler) v%s\n", appVersion)
 	fmt.Println("Usage: usc <command> [arguments]")
 	fmt.Println("\nZero-Trust Clean-Room Compilation & One-Click Install:")
 	fmt.Println("  install <URL | source | artifact> [--target T] Compile & install into local Agent")
@@ -41,10 +43,21 @@ func printUsage() {
 	fmt.Println("  trace -f <skill-id>                            Stream runtime capability trace")
 	fmt.Println("  replay <trace.usctrace>                        Deterministic decision replay")
 	fmt.Println("  top                                            Display real-time security dashboard")
+	fmt.Println("\nGeneral Options:")
+	fmt.Println("  --help, -h, help                               Display this help message")
+	fmt.Println("  --version, -v, version                         Display version information")
+}
+
+func printVersion() {
+	fmt.Printf("USC (Universal Skill Compiler) v%s\n", appVersion)
 }
 
 func dispatchCommand(cmd string, args []string) {
 	switch cmd {
+	case "help", "--help", "-h", "-help":
+		printUsage()
+	case "version", "--version", "-v", "-version":
+		printVersion()
 	case "build", "compile":
 		handleBuild(args)
 	case "install":
@@ -68,7 +81,8 @@ func dispatchCommand(cmd string, args []string) {
 	case "top":
 		handleTop()
 	default:
-		fmt.Printf("Unknown command: %s\nRun 'usc' for usage.\n", cmd)
+		fmt.Printf("Error: Unknown command: %s\nRun 'usc --help' for usage.\n", cmd)
+		os.Exit(1)
 	}
 }
 
@@ -131,26 +145,57 @@ func prepareBuildSource(source string) (string, string, func()) {
 }
 
 func runBuildStages(p *pipeline.PipelineState, srcDir, target string) {
-	fmt.Println(" [Stage 1/7] INGEST        (10%) ... PASS")
-	_ = p.RunIngest(srcDir)
-	fmt.Println(" [Stage 2/7] DECONTAMINATE (25%) ... PASS")
-	_ = p.RunDecontaminate(100.0)
-	fmt.Println(" [Stage 3/7] MINIMIZE      (15%) ... PASS")
-	_ = p.RunMinimize(minimizer.RuntimeSpec{TargetPlatform: target}, minimizer.Policy{PolicyID: "allow_all"})
-	fmt.Println(" [Stage 4/7] CLEAN_REBUILD (20%) ... PASS")
-	_ = p.RunCleanRebuild()
-	fmt.Println(" [Stage 5/7] RE_AUDIT      (10%) ... PASS")
-	_ = p.RunReAudit()
-	fmt.Println(" [Stage 6/7] SANDBOX       (15%) ... PASS")
-	_ = p.RunSandbox()
+	if err := runStageIngestAndDecontam(p, srcDir); err != nil {
+		fmt.Printf("Build failed: %v\n", err)
+		os.Exit(1)
+	}
+	if err := runStageMinimizeAndRebuild(p, target); err != nil {
+		fmt.Printf("Build failed: %v\n", err)
+		os.Exit(1)
+	}
+	if err := runStageAuditAndSandbox(p); err != nil {
+		fmt.Printf("Build failed: %v\n", err)
+		os.Exit(1)
+	}
 	finalizeBuild(p)
+}
+
+func runStageIngestAndDecontam(p *pipeline.PipelineState, srcDir string) error {
+	fmt.Println(" [Stage 1/7] INGEST        (10%) ... PASS")
+	if err := p.RunIngest(srcDir); err != nil {
+		return err
+	}
+	fmt.Println(" [Stage 2/7] DECONTAMINATE (25%) ... PASS")
+	return p.RunDecontaminate(100.0)
+}
+
+func runStageMinimizeAndRebuild(p *pipeline.PipelineState, target string) error {
+	fmt.Println(" [Stage 3/7] MINIMIZE      (15%) ... PASS")
+	spec := minimizer.RuntimeSpec{TargetPlatform: target}
+	if err := p.RunMinimize(spec, minimizer.Policy{PolicyID: "allow_all"}); err != nil {
+		return err
+	}
+	fmt.Println(" [Stage 4/7] CLEAN_REBUILD (20%) ... PASS")
+	return p.RunCleanRebuild()
+}
+
+func runStageAuditAndSandbox(p *pipeline.PipelineState) error {
+	fmt.Println(" [Stage 5/7] RE_AUDIT      (10%) ... PASS")
+	if err := p.RunReAudit(); err != nil {
+		return err
+	}
+	fmt.Println(" [Stage 6/7] SANDBOX       (15%) ... PASS")
+	return p.RunSandbox()
 }
 
 func finalizeBuild(p *pipeline.PipelineState) {
 	fmt.Println(" [Stage 7/7] ATTEST        ( 5%) ... PASS")
 	_, priv, _ := attestation.GenerateKeyPair()
 	distDir := "./dist"
-	_ = p.RunAttest(distDir, priv, "usc-local-authority")
+	if err := p.RunAttest(distDir, priv, "usc-local-authority"); err != nil {
+		fmt.Printf("Attestation failed: %v\n", err)
+		os.Exit(1)
+	}
 	fmt.Printf("\n[✓] Build Complete: %s\n", filepath.Join(distDir, p.SkillName+".usc"))
 	fmt.Printf("    Machine Proof Bundle: %s\n", filepath.Join(distDir, "proof"))
 	fmt.Println("    Capability Count Reduction (CCR): 71.4%")
@@ -198,17 +243,21 @@ func installExistingArtifact(artifact, target string) {
 	ad, err := adapter.GetAdapter(target)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
-		return
+		os.Exit(1)
 	}
 	fmt.Printf("[+] One-Click Installing %s into %s...\n", artifact, ad.DisplayName())
 	att := mockAttestationForExport(artifact, target)
 	tmpDir, _ := os.MkdirTemp("", "usc-install-*")
 	defer os.RemoveAll(tmpDir)
-	bundlePath, _ := ad.GenerateBundle(att, capability.NewSet(), tmpDir)
+	bundlePath, err := ad.GenerateBundle(att, capability.NewSet(), tmpDir)
+	if err != nil {
+		fmt.Printf("Bundle generation failed: %v\n", err)
+		os.Exit(1)
+	}
 	installedPath, err := ad.Install(bundlePath, "")
 	if err != nil {
 		fmt.Printf("Installation failed: %v\n", err)
-		return
+		os.Exit(1)
 	}
 	fmt.Printf("[✓] Successfully installed for beginner users!\n    Location: %s\n", installedPath)
 }
@@ -217,7 +266,7 @@ func installBuiltArtifact(p *pipeline.PipelineState, artifactPath, target string
 	ad, err := adapter.GetAdapter(target)
 	if err != nil {
 		fmt.Printf("Error obtaining adapter: %v\n", err)
-		return
+		os.Exit(1)
 	}
 	tmpDir, _ := os.MkdirTemp("", "usc-inst-*")
 	defer os.RemoveAll(tmpDir)
@@ -228,12 +277,12 @@ func installBuiltArtifact(p *pipeline.PipelineState, artifactPath, target string
 	bundlePath, err := ad.GenerateBundle(att, p.Blueprint, tmpDir)
 	if err != nil {
 		fmt.Printf("Bundle generation failed: %v\n", err)
-		return
+		os.Exit(1)
 	}
 	instPath, err := ad.Install(bundlePath, "")
 	if err != nil {
 		fmt.Printf("Installation failed: %v\n", err)
-		return
+		os.Exit(1)
 	}
 	fmt.Printf("\n[✓] Successfully Auto-Installed into %s!\n    Location: %s\n", ad.DisplayName(), instPath)
 }
@@ -393,14 +442,14 @@ func handleExport(args []string) {
 	ad, err := adapter.GetAdapter(target)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
-		return
+		os.Exit(1)
 	}
 	fmt.Printf("[+] Exporting %s for %s (%s)...\n", artifact, ad.DisplayName(), target)
 	att := mockAttestationForExport(artifact, target)
 	bundlePath, err := ad.GenerateBundle(att, capability.NewSet(), outDir)
 	if err != nil {
 		fmt.Printf("Export failed: %v\n", err)
-		return
+		os.Exit(1)
 	}
 	fmt.Printf("[✓] Exported successfully to: %s\n", bundlePath)
 }

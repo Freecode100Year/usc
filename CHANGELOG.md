@@ -2,6 +2,20 @@
 
 All notable changes to the USC (Universal Skill Compiler) project will be documented in this file.
 
+## [v0.1.3] - 2026-09-10
+
+### 🐛 修复与加固 (Bug Fixes & Hardening)
+- **标准 CLI `--help` / `-h` / `help` 与 `--version` 标志支持**：
+  - 修复执行 `usc --help` 被误识别为 `Unknown command` 的问题，现可正确输出完整使用指引并以退出状态码 0 正常结束。
+  - 新增 `usc --version` / `-v` 原生版本输出。
+- **自动化脚本退出状态码（Exit Code）规范化**：
+  - 修复未知命令、非法参数或编译/安装流程失败时仍返回成功状态码 0 的严重隐患。
+  - 当收到未知指令或流程异常时严格返回退出码 1，确保 CI/CD 自动化流水线与自主 Agent 脚本能够准确判别执行成败。
+- **全阶段异常熔断拦截**：
+  - 在 `RunIngest`、`RunDecontaminate`、`RunMinimize`、`RunReAudit`、`RunSandbox` 及 `RunAttest` 遇到严重违规（如越权或 Attestation 异常）时，立即终端熔断并返回非零状态码，禁止静默忽略错误。
+
+---
+
 ## [v0.1.2] - 2026-09-10
 
 ### ✨ 更新功能 (New Features)
