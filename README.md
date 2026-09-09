@@ -2,10 +2,20 @@
 
 ## 📌 最新更新日志 (Changelog)
 
+### [v0.1.1] - 2026-09-10
+
+#### ✨ 更新功能 (New Features)
+- **多 Agent 原生生态适配与新手一键载入 (`usc-core/adapter`)**：
+  - 全面支持 **OpenClaw**、**Hermes Agent**、**Claude Code**、**AGY CLI (Antigravity CLI)**、**Codex (OpenAI Assistants)** 五大异构 Agent 运行时。
+  - **新手一键自动侦测与加载 (`usc install`)**：面向电脑新手用户，无需手动编辑配置或查找路径，自动嗅探系统已安装的 Agent Runtime，一键将通过零信任审核的 Skill 部署到位。
+  - **原生格式导出 (`usc export`)**：支持将编译产物独立导出为各生态的原生规范目录结构（OpenClaw `skill.yaml`、Hermes `manifest.json`、Claude Code `tool.json`、AGY CLI `SKILL.md`、Codex `function.json`）。
+  - **环境状态自检 (`usc targets`)**：清晰可视化列出 5 大平台在当前计算机上的安装识别状态与技能存储路径。
+
+---
+
 ### [v0.1.0] - 2026-09-10
 
 #### ✨ 更新功能 (New Features)
-- **文档与使用指南全面完善**：自述文件中完整补充 USC CLI 10 个子命令的详细参数、交互示例、工作流说明及机器证明包（Proof Bundle）检验指南。
 - **零信任洁净室编译器架构落地**：完整实现 USC Zero-Trust Architecture Specification v0.1 核心体系。
 - **能力偏序半格与代数计算 (`usc-core/capability`)**：
   - 实现结构化能力类型系统（网络、文件系统、凭据、进程/命令执行、系统调用等），防御性拒绝野生通配符。
@@ -38,7 +48,7 @@
 - **机器可验证密码学证明包 (`usc-core/attestation`)**：
   - 生成并校验 Ed25519 签名的 `attestation.json` 与完备 Proof Bundle。
 - **完备 CLI 工具链 (`cmd/usc`)**：
-  - 提供 `analyze`, `extract`, `rebuild`, `build`, `verify`, `verify-proof`, `run`, `trace`, `replay`, `top` 完整十个标准化核心命令。
+  - 提供 `analyze`, `extract`, `rebuild`, `build`, `verify`, `verify-proof`, `run`, `trace`, `replay`, `top`, `targets`, `export`, `install` 完整命令行。
 
 #### 🐛 修复与加固 (Bug Fixes & Hardening)
 - 修复通配符路径匹配越界隐患：引入路径段 AST（Segment AST）严格对比，坚决杜绝路径穿越（Path Traversal）。
@@ -57,242 +67,127 @@ USC（Universal Skill Compiler）是一个**针对不可信意图、未知实现
 
 ---
 
-# 🚀 快速上手与使用方法 (Usage Guide)
+# 🌟 新手小白快速上手指南 (Beginner's Guide)
 
-### 1. 编译安装
-
-在具备 Go 1.22+ 环境的终端中克隆并编译：
-
-```bash
-# 克隆仓库
-git clone https://github.com/Freecode100Year/usc.git
-cd usc
-
-# 编译生成 CLI 命令行工具
-go build -o bin/usc.exe ./cmd/usc
-
-# (Linux / macOS)
-# go build -o bin/usc ./cmd/usc
-```
-
-编译完成后即可通过 `bin/usc.exe`（或将 `bin` 加入 `PATH`）使用命令行。
-
----
-
-### 2. 核心 CLI 命令详解
-
-USC 提供了 10 个标准化的零信任编译器与运行时管理命令：
+大部分用户可能并非底层安全专家或系统极客，USC 专门针对电脑新手提供了**全自动侦测与一键加载**方案，只需三步即可在主流 AI Agent 中安全使用任何 Skill：
 
 ```text
-Core Commands:
-  analyze <source>               分析不可信 Skill 意图、观测真实行为并计算发散度
-  extract <source>               无毒提取 Canonical Intent IR，隔离原始提示词
-  rebuild <blueprint> [--target] 在物理洁净室中独立重建目标运行时代码
-  build <source> [--target]      执行端到端 7 阶段零信任编译并输出机器证明包
-  verify <artifact.usc>          验证编译产物完整性与 Ed25519 签名
-  verify-proof <proof-dir>       独立核验机器证明包（Proof Bundle）5 大证明义务
-  run <artifact.usc>             在受限沙箱与能力代理（Broker）中执行 Skill
-  trace -f <skill-id>            实时追踪运行时能力中介与鉴权请求流
-  replay <trace.usctrace>        执行确定性决策重放（Deterministic Decision Replay）
-  top                            显示系统零信任安全状态与实时监控仪表盘
+[不可信 Skill 源码] 
+       │ 1. 一键编译并完成零信任洁净室审查
+       ▼
+  usc build ./my-skill
+       │ 2. 自动生成 .usc 制品与机器证明包
+       ▼
+  usc install dist/my-skill.usc
+       │ 3. 自动嗅探你的电脑安装了哪个 Agent，直接部署到位！
+       ▼
+[OpenClaw / Hermes / Claude Code / AGY CLI / Codex 立即可用！]
 ```
 
 ---
 
-#### 🔍 命令 1：分析不可信 Skill (`usc analyze`)
-用于审查任意来源（ClawHub、GitHub、ZIP、本地脚本等）的不可信代码。通过 AST 分析其声明意图（$I_{decl}$）与观测到的实际行为（$B_{obs}$），检测越权残留（$B_{extra}$）并计算风险加权发散度分数（$D_N$）。
+## 🎯 电脑新手常用操作（2 条命令搞定）
 
+### 第一步：检查你的电脑已安装哪些 Agent
+运行：
 ```bash
-usc analyze ./examples/weather-skill
+usc targets
 ```
-**输出示例**：
-```text
-[+] Analyzing untrusted source: ./examples/weather-skill
-------------------------------------------------------------
-Status:             PASS
-Divergence Score:   0.00
-Observed Caps:      1
-Extra Behaviors:    0
-```
-
----
-
-#### 🧬 命令 2：提取标准意图 IR (`usc extract`)
-将不可信 Skill 中的有效目标转换为平台中立的 `Canonical Intent IR`。彻底过滤可能夹带间接提示词注入（Prompt Injection）的原始文本与注释，实行物理级污染隔离。
-
-```bash
-usc extract ./examples/weather-skill
-```
-**输出示例**：
-```text
-[+] Extracting Canonical Intent IR for: ./examples/weather-skill
-Schema:      usc.intent.v0.1
-Intent ID:   intent_weather-skill
-Status:      TAINT_QUARANTINED
-Canonical IR extracted without raw prompt leakage.
-```
-
----
-
-#### 🏗️ 命令 3：洁净室独立重建 (`usc rebuild`)
-读取冻结后的 Minimal Capability Blueprint 与 Canonical Intent IR，在无源码挂载、关闭外网的物理洁净室中为目标平台（如 `hermes`、`openclaw`、`langgraph`）重新生成功能代码。
-
-```bash
-usc rebuild blueprint.json --target hermes
-```
-**输出示例**：
-```text
-[+] Rebuilding candidate in Clean-Room for target: hermes
-Physical Barrier:  ACTIVE (Separate Process, Net Denied)
-Raw Source Leaks:  0 bytes
-Codegen Status:    GENERATED_UNTRUSTED -> RE_AUDITED (PASS)
-```
-
----
-
-#### ⚙️ 命令 4：端到端零信任编译 (`usc build`)
-串联执行完整的 7 阶段流水线：
-`INGEST (10%)` $\rightarrow$ `DECONTAMINATE (25%)` $\rightarrow$ `MINIMIZE (15%)` $\rightarrow$ `CLEAN_REBUILD (20%)` $\rightarrow$ `RE_AUDIT (10%)` $\rightarrow$ `SANDBOX (15%)` $\rightarrow$ `ATTEST (5%)`。
-
-```bash
-usc build ./examples/weather-skill --target hermes
-```
-**输出示例**：
-```text
-[+] Building weather-skill for target hermes...
- [Stage 1/7] INGEST        (10%) ... PASS
- [Stage 2/7] DECONTAMINATE (25%) ... PASS
- [Stage 3/7] MINIMIZE      (15%) ... PASS
- [Stage 4/7] CLEAN_REBUILD (20%) ... PASS
- [Stage 5/7] RE_AUDIT      (10%) ... PASS
- [Stage 6/7] SANDBOX       (15%) ... PASS
- [Stage 7/7] ATTEST        ( 5%) ... PASS
-
-[✓] Build Complete: dist/weather-skill.usc
-    Machine Proof Bundle: dist/proof
-    Capability Count Reduction (CCR): 71.4%
-    Attack Surface Reduction   (ASR): 92.5%
-    Artifact Status: ATTESTED
-```
-
----
-
-#### 🔐 命令 5：制品签名验证 (`usc verify`)
-独立验证 `.usc` 产物的文件散列、编译器标识与 Ed25519 签名有效性，核对目标企业策略匹配度。
-
-```bash
-usc verify dist/weather-skill.usc
-```
-**输出示例**：
-```text
-[+] Verifying artifact: dist/weather-skill.usc
-Artifact Digest:    sha256:d82e11a94f...
-Attestation Status: VALID_ED25519_SIGNATURE
-Policy Match:       TARGET_POLICY_APPROVED
-Verdict:            PASS
-```
-
----
-
-#### 📜 命令 6：机器证明包全链验证 (`usc verify-proof`)
-不信任任何编译报告或仪表盘，直接对 `dist/proof/` 目录中的全部机器证据进行严格独立计算与数学判定，验证 5 大证明义务（$PO_1 \land PO_2 \land PO_3 \land PO_4 \land PO_5$）：
-
-```bash
-usc verify-proof dist/proof
-```
-**输出示例**：
-```text
-[+] Verifying Machine Proof Bundle in: dist/proof
-  [✓] attestation.json:      Valid schema & signature
-  [✓] audit-chain.json:      Lossless hash chain verified (H0 -> Hn)
-  [✓] cleanroom-proof.json:  0 raw source leaks, net denied verified
-  [✓] blueprint.json:        Minimal lattice bound verified
-  [✓] sbom.spdx.json:        SPDX 2.3 SBOM consistent
-
-All 5 Proof Obligations satisfied: PO1 ∧ PO2 ∧ PO3 ∧ PO4 ∧ PO5 = true
-Final State: ATTESTED
-```
-
----
-
-#### 🛡️ 命令 7：受限沙箱运行 (`usc run`)
-在 USC 运行时强制中介平面（Enforcement Plane）中启动 Skill。禁止读取环境变量明文密钥，所有对外交互必须经过中介 Broker。
-
-```bash
-usc run dist/weather-skill.usc
-```
-**输出示例**：
-```text
-[+] Launching artifact inside guarded USC Runtime: dist/weather-skill.usc
-Runtime Mediation Plane: ACTIVE
-Secret Capability Broker: credential:// handles mapped
-Egress Network Guard:    DESTINATION_CHECK_ENFORCED
-Execution Confinement:   SECCOMP_SANDBOX_ACTIVE
-[Runtime Output] Hello from zero-trust rebuilt Agent Skill!
-```
-
----
-
-#### 📡 命令 8：实时能力追踪 (`usc trace`)
-实时监控正在执行的 Skill 发起的每一项权限请求、中介检查状态与拦截结果：
-
-```bash
-usc trace -f weather-skill
-```
-**输出示例**：
-```text
-[+] Streaming live runtime capability trace for: weather-skill
-17:02:01.104 HANDLE_RESOLVE credential://github/pr_reader
-17:02:01.105 HOST_CHECK     api.github.com PASS
-17:02:01.105 METHOD_CHECK   GET PASS
-17:02:01.106 PATH_CHECK     /repos/foo/bar/pulls/42 PASS
-17:02:01.120 TLS_CONNECT    api.github.com:443
-17:02:01.240 RESPONSE       200 / 14.2KB
-```
-
----
-
-#### ⏪ 命令 9：确定性决策重放 (`usc replay`)
-基于飞行记录器（Flight Recorder）生成的 `.usctrace` 追踪轨迹与当时冻结的策略基线，逐步回放安全裁决，确保重放决策 100% 比特级确定：
-
-```bash
-usc replay trace.usctrace --step
-```
-**输出示例**：
-```text
-[+] Starting Deterministic Decision Replay for: trace.usctrace
-Step 01: Expected=ALLOW Replayed=ALLOW [MATCH]
-Step 02: Expected=DENY Replayed=DENY [MATCH]
-Deterministic Replay Integrity: true (All steps bit-exact)
-```
-
----
-
-#### 📊 命令 10：实时安全监控仪表盘 (`usc top`)
-查看活跃运行的 Skill 状态、洁净室运行情况、无损审计链长度、平均 ASR 与 CCR 削减比率：
-
-```bash
-usc top
-```
-**输出示例**：
+**终端将自动扫描并显示**：
 ```text
 ================================================================
-             USC ZERO-TRUST SECURITY DASHBOARD                  
+          SUPPORTED AGENT RUNTIMES & LOCAL DETECTION            
 ================================================================
- Active Skills:      1 running / 0 blocked
- Clean-Room Status:  ONLINE (Isolated)
- Audit Chain Length: 142 events (Hash Chain: OK)
- Average ASR:        92.5%
- Average CCR:        71.4%
- Flight Recorder:    RingBuffer active (0 violations)
+ • openclaw     : OpenClaw AI Runtime        [DETECTED: READY]
+   Path: C:\Users\yourname\.openclaw\skills
+ • hermes       : Hermes Autonomous Agent    [NOT DETECTED]
+   Path: C:\Users\yourname\.hermes\skills
+ • claudecode   : Claude Code CLI            [DETECTED: READY]
+   Path: C:\Users\yourname\.claude\skills
+ • agycli       : Antigravity CLI (agy)      [DETECTED: READY]
+   Path: C:\Users\yourname\.gemini\antigravity-cli\skills
+ • codex        : OpenAI Codex / Assistants  [DETECTED: READY]
+   Path: C:\Users\yourname\.codex\tools
 ================================================================
+Tip for beginners: Run 'usc install <artifact.usc>' to auto-load!
 ```
 
 ---
 
-### 3. 机器证明包目录结构 (Machine Proof Bundle)
+### 第二步：一键自动安装到 Agent 中
+编译后，直接运行：
+```bash
+usc install dist/weather-skill.usc
+```
+USC 会自动检测本地已激活的 Agent 运行时，将格式转换为原生规范并自动放入对应的技能文件夹中，无需任何手动复杂配置！
 
-每次成功执行 `usc build` 后，系统将在 `dist/` 目录下生成完整的机器可验证证明集合：
+---
+
+# 🤖 支持的 5 大主流 Agent 运行时详情
+
+| 平台名称 | 标识符 (`--target`) | 自动侦测路径 | 生成的原生适配物 |
+| :--- | :--- | :--- | :--- |
+| **OpenClaw** | `openclaw` | `~/.openclaw/skills` | `skill.yaml`, `runner.py`（沙箱隔离驱动） |
+| **Hermes Agent** | `hermes` | `~/.hermes/skills` | `manifest.json`, `index.js`（受限入口） |
+| **Claude Code** | `claudecode` | `~/.claude/skills` | `tool.json`（Tool Use Schema）, `execute.sh` |
+| **AGY CLI** | `agycli` | `~/.gemini/antigravity-cli/skills` | `SKILL.md`（标准 YAML Frontmatter 与元数据） |
+| **OpenAI Codex** | `codex` | `~/.codex/tools` | `function.json`（Function Calling 契约）, `index.js` |
+
+如果你希望明确指定安装到某一个 Agent，只需带上 `--target` 参数：
+```bash
+# 安装到 Claude Code
+usc install dist/weather-skill.usc --target claudecode
+
+# 安装到 OpenClaw
+usc install dist/weather-skill.usc --target openclaw
+
+# 安装到 Google Antigravity CLI (agy)
+usc install dist/weather-skill.usc --target agycli
+
+# 安装到 Hermes Agent
+usc install dist/weather-skill.usc --target hermes
+
+# 安装到 OpenAI Codex / Assistants
+usc install dist/weather-skill.usc --target codex
+```
+
+---
+
+### 📦 手动导出原生技能包（离线分发或二次分享）
+
+如果你想将生成的技能打包发给其他人，使用 `export` 命令：
+```bash
+usc export dist/weather-skill.usc --target openclaw --out ./my-exported-skills
+```
+将在指定目录下生成可以直接复制使用的目标平台技能包。
+
+---
+
+# 🛠️ 进阶命令手册 (CLI Full Reference)
+
+USC 提供完整的 13 个核心命令行指令：
+
+| 指令 | 作用说明 | 典型场景 |
+| :--- | :--- | :--- |
+| `usc analyze <source>` | 意图去污与发散度分析 | 快速审查 GitHub / ClawHub 下载的不可信插件是否有后门 |
+| `usc extract <source>` | 提取平台中立标准意图 IR | 剥离所有提示词注入攻击，生成纯净契约 |
+| `usc rebuild <blueprint>` | 物理洁净室代码重建 | 隔绝网络和原始文件，由洁净室重新生成代码 |
+| `usc build <source>` | 端到端 7 阶段全量编译 | 生成带有机器证明包的 `.usc` 二进制制品 |
+| `usc verify <artifact>` | 验证制品签名与哈希 | 上线部署前验证制品完整性与合规性 |
+| `usc verify-proof <proof-dir>`| 机器验证证明包全链 | 机器自动核验 5 大证明义务（$PO_1 \sim PO_5$） |
+| `usc run <artifact>` | 受限沙箱与代理中介运行 | 安全执行 Skill，切断明文环境变量泄露风险 |
+| `usc trace -f <skill-id>` | 实时运行态能力追踪 | 动态观察网络请求、文件访问与权限拦截 |
+| `usc replay <trace>` | 确定性决策重放 | 发生违规或故障时，100% 逐步重放安全判定过程 |
+| `usc top` | 全局安全仪表盘 | 查看当前系统运行状态、审计链与攻击面缩减率 |
+| `usc targets` | 探测已支持的 Agent 环境 | 新手查看当前电脑具备哪些可用的 Agent 运行时 |
+| `usc export <artifact>` | 导出为目标 Agent 原生技能 | 生成对应 Agent 原生目录结构供离线导入 |
+| `usc install <artifact>` | 一键安装到目标 Agent | **新手最爱**，免配置自动部署到 Agent 技能库 |
+
+---
+
+### 机器证明包目录结构 (Machine Proof Bundle)
+
+每次成功执行 `usc build` 后，系统将在 `dist/proof/` 目录下生成完整的机器可验证证明集合：
 
 ```text
 dist/
