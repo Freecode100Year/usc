@@ -5,6 +5,8 @@ type ArtifactInfo struct {
 	Name           string `json:"name"`
 	SHA256         string `json:"sha256"`
 	TargetPlatform string `json:"target_platform"`
+	SourceDir      string `json:"source_dir,omitempty"`
+	SourceURL      string `json:"source_url,omitempty"`
 }
 
 // Claims encapsulates the zero-trust claims verified during compilation.

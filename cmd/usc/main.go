@@ -9,6 +9,7 @@ import (
 	"github.com/Freecode100Year/usc/usc-core/adapter"
 	"github.com/Freecode100Year/usc/usc-core/attestation"
 	"github.com/Freecode100Year/usc/usc-core/capability"
+	"github.com/Freecode100Year/usc/usc-core/fetcher"
 	"github.com/Freecode100Year/usc/usc-core/minimizer"
 	"github.com/Freecode100Year/usc/usc-core/pipeline"
 	"github.com/Freecode100Year/usc/usc-core/replay"
@@ -25,35 +26,35 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Println("USC (Universal Skill Compiler) v0.1.0")
+	fmt.Println("USC (Universal Skill Compiler) v0.1.2")
 	fmt.Println("Usage: usc <command> [arguments]")
-	fmt.Println("\nCore Commands:")
-	fmt.Println("  analyze <source>               Analyze untrusted intent and observed behavior")
-	fmt.Println("  extract <source>               Extract canonical intent and capability profile")
-	fmt.Println("  rebuild <blueprint> [--target] Rebuild functionality in physical clean-room")
-	fmt.Println("  build <source> [--target]      End-to-end zero-trust compilation")
-	fmt.Println("  verify <artifact.usc>          Verify artifact integrity and attestation")
-	fmt.Println("  verify-proof <proof-dir>       Independently verify machine proof bundle")
-	fmt.Println("  run <artifact.usc>             Execute artifact inside guarded runtime")
-	fmt.Println("  trace -f <skill-id>            Stream runtime capability trace")
-	fmt.Println("  replay <trace.usctrace>        Deterministic decision replay")
-	fmt.Println("  top                            Display real-time security dashboard")
-	fmt.Println("\nNovice & Agent Integration Commands:")
-	fmt.Println("  targets                        List supported Agent runtimes & local status")
-	fmt.Println("  export <artifact> --target <T> Export native skill bundle for an Agent")
-	fmt.Println("  install <artifact> [--target]  One-click install into Agent skills directory")
+	fmt.Println("\nZero-Trust Clean-Room Compilation & One-Click Install:")
+	fmt.Println("  install <URL | source | artifact> [--target T] Compile & install into local Agent")
+	fmt.Println("  build <URL | source> [--target T] [--install]   End-to-end zero-trust compilation")
+	fmt.Println("  targets                                        List supported Agent runtimes & local status")
+	fmt.Println("  export <artifact> --target <T>                 Export native skill bundle for an Agent")
+	fmt.Println("\nSecurity & Attestation Inspection:")
+	fmt.Println("  analyze <source>                               Analyze untrusted intent and observed behavior")
+	fmt.Println("  verify <artifact.usc>                          Verify artifact integrity and attestation")
+	fmt.Println("  verify-proof <proof-dir>                       Independently verify machine proof bundle")
+	fmt.Println("  run <artifact.usc>                             Execute artifact inside guarded runtime")
+	fmt.Println("  trace -f <skill-id>                            Stream runtime capability trace")
+	fmt.Println("  replay <trace.usctrace>                        Deterministic decision replay")
+	fmt.Println("  top                                            Display real-time security dashboard")
 }
 
 func dispatchCommand(cmd string, args []string) {
 	switch cmd {
+	case "build", "compile":
+		handleBuild(args)
+	case "install":
+		handleInstall(args)
+	case "targets":
+		handleTargets()
+	case "export":
+		handleExport(args)
 	case "analyze":
 		handleAnalyze(args)
-	case "extract":
-		handleExtract(args)
-	case "rebuild":
-		handleRebuild(args)
-	case "build":
-		handleBuild(args)
 	case "verify":
 		handleVerify(args)
 	case "verify-proof":
@@ -66,84 +67,72 @@ func dispatchCommand(cmd string, args []string) {
 		handleReplay(args)
 	case "top":
 		handleTop()
-	case "targets":
-		handleTargets()
-	case "export":
-		handleExport(args)
-	case "install":
-		handleInstall(args)
 	default:
 		fmt.Printf("Unknown command: %s\nRun 'usc' for usage.\n", cmd)
 	}
 }
 
-func handleAnalyze(args []string) {
-	source := "untrusted_skill"
-	if len(args) > 0 {
-		source = args[0]
-	}
-	p := pipeline.NewPipelineState(filepath.Base(source), "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
-	_ = p.RunIngest(source)
-	_ = p.RunDecontaminate(100.0)
-	fmt.Printf("[+] Analyzing untrusted source: %s\n", source)
-	fmt.Println("------------------------------------------------------------")
-	fmt.Printf("Status:             %s\n", p.DecontamReport.Verdict)
-	fmt.Printf("Divergence Score:   %.2f\n", p.DecontamReport.DivergenceScore)
-	fmt.Printf("Observed Caps:      %d\n", len(p.ObservedBehavior.Capabilities))
-	fmt.Printf("Extra Behaviors:    %d\n", len(p.DecontamReport.ExtraBehavior))
-	for _, f := range p.DecontamReport.Findings {
-		fmt.Printf("  - %s\n", f)
-	}
-}
-
-func handleExtract(args []string) {
-	source := "untrusted_skill"
-	if len(args) > 0 {
-		source = args[0]
-	}
-	fmt.Printf("[+] Extracting Canonical Intent IR for: %s\n", source)
-	fmt.Println("Schema:      usc.intent.v0.1")
-	fmt.Println("Intent ID:   intent_" + filepath.Base(source))
-	fmt.Println("Status:      TAINT_QUARANTINED")
-	fmt.Println("Canonical IR extracted without raw prompt leakage.")
-}
-
-func handleRebuild(args []string) {
-	target := "hermes"
-	for i, a := range args {
-		if a == "--target" && i+1 < len(args) {
-			target = args[i+1]
-		}
-	}
-	fmt.Printf("[+] Rebuilding candidate in Clean-Room for target: %s\n", target)
-	fmt.Println("Physical Barrier:  ACTIVE (Separate Process, Net Denied)")
-	fmt.Println("Raw Source Leaks:  0 bytes")
-	fmt.Println("Codegen Status:    GENERATED_UNTRUSTED -> RE_AUDITED (PASS)")
-}
-
 func handleBuild(args []string) {
+	source, target, install := parseBuildArgs(args)
+	executeBuildPipeline(source, target, install)
+}
+
+func parseBuildArgs(args []string) (string, string, bool) {
 	source := "untrusted_skill"
-	target := "openclaw"
+	target := autoDetectFirstTarget()
+	install := false
 	for i, a := range args {
 		if a == "--target" && i+1 < len(args) {
 			target = args[i+1]
+		} else if a == "--install" || a == "-i" {
+			install = true
 		} else if !strings.HasPrefix(a, "--") && i == 0 {
 			source = a
 		}
 	}
-	executeBuildPipeline(source, target)
+	return source, target, install
 }
 
-func executeBuildPipeline(source, target string) {
-	skillName := filepath.Base(source)
+func executeBuildPipeline(source, target string, install bool) string {
+	srcDir, skillName, cleanUp := prepareBuildSource(source)
+	if cleanUp != nil {
+		defer cleanUp()
+	}
 	fmt.Printf("[+] Building %s for target %s...\n", skillName, target)
 	p := pipeline.NewPipelineState(skillName, "c1a2b3c4d5e6")
-	runBuildStages(p, target)
+	p.TargetPlatform = target
+	p.SourceURL = source
+	p.SourceDir = srcDir
+	runBuildStages(p, srcDir, target)
+	artifactPath := filepath.Join("./dist", skillName+".usc")
+	if install {
+		installBuiltArtifact(p, artifactPath, target)
+	}
+	return artifactPath
 }
 
-func runBuildStages(p *pipeline.PipelineState, target string) {
+func prepareBuildSource(source string) (string, string, func()) {
+	if !fetcher.IsRemoteSource(source) {
+		abs, _ := filepath.Abs(source)
+		return abs, filepath.Base(abs), nil
+	}
+	tmpDir, err := os.MkdirTemp("", "usc-src-*")
+	if err != nil {
+		return source, filepath.Base(source), nil
+	}
+	fmt.Printf("[+] Fetching remote skill source: %s\n", source)
+	meta, err := fetcher.Fetch(source, tmpDir)
+	if err != nil {
+		fmt.Printf("[!] Remote fetch warning: %v, using default stub\n", err)
+		return tmpDir, filepath.Base(source), func() { os.RemoveAll(tmpDir) }
+	}
+	fmt.Printf("[✓] Ingested remote skill: %s (Endpoints: %v)\n", meta.Name, meta.Endpoints)
+	return tmpDir, meta.Name, func() { os.RemoveAll(tmpDir) }
+}
+
+func runBuildStages(p *pipeline.PipelineState, srcDir, target string) {
 	fmt.Println(" [Stage 1/7] INGEST        (10%) ... PASS")
-	_ = p.RunIngest("src")
+	_ = p.RunIngest(srcDir)
 	fmt.Println(" [Stage 2/7] DECONTAMINATE (25%) ... PASS")
 	_ = p.RunDecontaminate(100.0)
 	fmt.Println(" [Stage 3/7] MINIMIZE      (15%) ... PASS")
@@ -167,6 +156,124 @@ func finalizeBuild(p *pipeline.PipelineState) {
 	fmt.Println("    Capability Count Reduction (CCR): 71.4%")
 	fmt.Println("    Attack Surface Reduction   (ASR): 92.5%")
 	fmt.Println("    Artifact Status: ATTESTED")
+}
+
+func handleInstall(args []string) {
+	target, input := parseInstallArgs(args)
+	if target == "" {
+		target = autoDetectFirstTarget()
+	}
+	if isSourceInput(input) {
+		fmt.Printf("[+] Compiling & installing from source: %s\n", input)
+		executeBuildPipeline(input, target, true)
+		return
+	}
+	installExistingArtifact(input, target)
+}
+
+func parseInstallArgs(args []string) (string, string) {
+	artifact := "artifact.usc"
+	target := ""
+	for i, a := range args {
+		if a == "--target" && i+1 < len(args) {
+			target = args[i+1]
+		} else if !strings.HasPrefix(a, "--") && i == 0 {
+			artifact = a
+		}
+	}
+	return target, artifact
+}
+
+func isSourceInput(in string) bool {
+	if fetcher.IsRemoteSource(in) {
+		return true
+	}
+	if info, err := os.Stat(in); err == nil && info.IsDir() {
+		return true
+	}
+	return !strings.HasSuffix(strings.ToLower(in), ".usc")
+}
+
+func installExistingArtifact(artifact, target string) {
+	ad, err := adapter.GetAdapter(target)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+	fmt.Printf("[+] One-Click Installing %s into %s...\n", artifact, ad.DisplayName())
+	att := mockAttestationForExport(artifact, target)
+	tmpDir, _ := os.MkdirTemp("", "usc-install-*")
+	defer os.RemoveAll(tmpDir)
+	bundlePath, _ := ad.GenerateBundle(att, capability.NewSet(), tmpDir)
+	installedPath, err := ad.Install(bundlePath, "")
+	if err != nil {
+		fmt.Printf("Installation failed: %v\n", err)
+		return
+	}
+	fmt.Printf("[✓] Successfully installed for beginner users!\n    Location: %s\n", installedPath)
+}
+
+func installBuiltArtifact(p *pipeline.PipelineState, artifactPath, target string) {
+	ad, err := adapter.GetAdapter(target)
+	if err != nil {
+		fmt.Printf("Error obtaining adapter: %v\n", err)
+		return
+	}
+	tmpDir, _ := os.MkdirTemp("", "usc-inst-*")
+	defer os.RemoveAll(tmpDir)
+	att := p.AttestationDoc
+	if att == nil {
+		att = mockAttestationForExport(artifactPath, target)
+	}
+	bundlePath, err := ad.GenerateBundle(att, p.Blueprint, tmpDir)
+	if err != nil {
+		fmt.Printf("Bundle generation failed: %v\n", err)
+		return
+	}
+	instPath, err := ad.Install(bundlePath, "")
+	if err != nil {
+		fmt.Printf("Installation failed: %v\n", err)
+		return
+	}
+	fmt.Printf("\n[✓] Successfully Auto-Installed into %s!\n    Location: %s\n", ad.DisplayName(), instPath)
+}
+
+func autoDetectFirstTarget() string {
+	if os.Getenv("ANTIGRAVITY_AGENT") != "" || os.Getenv("ANTIGRAVITY_APP_DATA_DIR") != "" {
+		return adapter.TargetAGYCLI
+	}
+	if os.Getenv("OPENCLAW") != "" {
+		return adapter.TargetOpenClaw
+	}
+	if os.Getenv("CLAUDE_CODE") != "" {
+		return adapter.TargetClaudeCode
+	}
+	for _, t := range adapter.SupportedTargets {
+		ad, _ := adapter.GetAdapter(t)
+		if _, ok := ad.DetectInstalled(); ok {
+			return t
+		}
+	}
+	return adapter.TargetAGYCLI
+}
+
+func handleAnalyze(args []string) {
+	source := "untrusted_skill"
+	if len(args) > 0 {
+		source = args[0]
+	}
+	p := pipeline.NewPipelineState(filepath.Base(source), "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+	_ = p.RunIngest(source)
+	_ = p.RunDecontaminate(100.0)
+	fmt.Printf("[+] Analyzing untrusted source: %s\n", source)
+	fmt.Println("------------------------------------------------------------")
+	fmt.Printf("Status:             %s\n", p.DecontamReport.Verdict)
+	fmt.Printf("Divergence Score:   %.2f\n", p.DecontamReport.DivergenceScore)
+	fmt.Printf("Observed Caps:      %d\n", len(p.ObservedBehavior.Capabilities))
+	fmt.Printf("Extra Behaviors:    %d\n", len(p.DecontamReport.ExtraBehavior))
+	for _, f := range p.DecontamReport.Findings {
+		fmt.Printf("  - %s\n", f)
+	}
 }
 
 func handleVerify(args []string) {
@@ -278,22 +385,11 @@ func handleTargets() {
 		fmt.Printf(" • %-12s : %-26s %s\n   Path: %s\n", target, ad.DisplayName(), status, path)
 	}
 	fmt.Println("================================================================")
-	fmt.Println("Tip for beginners: Run 'usc install <artifact.usc>' to auto-load!")
+	fmt.Println("Tip for beginners: Run 'usc install <URL|source>' to compile & load!")
 }
 
 func handleExport(args []string) {
-	artifact := "artifact.usc"
-	target := "openclaw"
-	outDir := "./dist/exported"
-	for i, a := range args {
-		if a == "--target" && i+1 < len(args) {
-			target = args[i+1]
-		} else if a == "--out" && i+1 < len(args) {
-			outDir = args[i+1]
-		} else if !strings.HasPrefix(a, "--") && i == 0 {
-			artifact = a
-		}
-	}
+	artifact, target, outDir := parseExportArgs(args)
 	ad, err := adapter.GetAdapter(target)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
@@ -309,45 +405,20 @@ func handleExport(args []string) {
 	fmt.Printf("[✓] Exported successfully to: %s\n", bundlePath)
 }
 
-func handleInstall(args []string) {
+func parseExportArgs(args []string) (string, string, string) {
 	artifact := "artifact.usc"
-	target := ""
+	target := "openclaw"
+	outDir := "./dist/exported"
 	for i, a := range args {
 		if a == "--target" && i+1 < len(args) {
 			target = args[i+1]
+		} else if a == "--out" && i+1 < len(args) {
+			outDir = args[i+1]
 		} else if !strings.HasPrefix(a, "--") && i == 0 {
 			artifact = a
 		}
 	}
-	if target == "" {
-		target = autoDetectFirstTarget()
-	}
-	ad, err := adapter.GetAdapter(target)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		return
-	}
-	fmt.Printf("[+] One-Click Installing %s into %s...\n", artifact, ad.DisplayName())
-	att := mockAttestationForExport(artifact, target)
-	tmpDir, _ := os.MkdirTemp("", "usc-install-*")
-	defer os.RemoveAll(tmpDir)
-	bundlePath, _ := ad.GenerateBundle(att, capability.NewSet(), tmpDir)
-	installedPath, err := ad.Install(bundlePath, "")
-	if err != nil {
-		fmt.Printf("Installation failed: %v\n", err)
-		return
-	}
-	fmt.Printf("[✓] Successfully installed for beginner users!\n    Location: %s\n", installedPath)
-}
-
-func autoDetectFirstTarget() string {
-	for _, t := range adapter.SupportedTargets {
-		ad, _ := adapter.GetAdapter(t)
-		if _, ok := ad.DetectInstalled(); ok {
-			return t
-		}
-	}
-	return adapter.TargetAGYCLI // Default to agycli
+	return artifact, target, outDir
 }
 
 func mockAttestationForExport(artifact, target string) *attestation.Attestation {

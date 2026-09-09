@@ -4,7 +4,18 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
+
+// CleanSkillName strips adapter prefixes and extensions to yield a canonical skill name.
+func CleanSkillName(rawName string) string {
+	s := strings.TrimSpace(rawName)
+	s = strings.TrimSuffix(s, ".usc")
+	for _, prefix := range []string{"agy-", "openclaw-", "hermes-", "claudecode-", "codex-"} {
+		s = strings.TrimPrefix(s, prefix)
+	}
+	return s
+}
 
 func copyDirectory(src, dst string) error {
 	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {

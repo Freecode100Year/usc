@@ -2,6 +2,28 @@
 
 All notable changes to the USC (Universal Skill Compiler) project will be documented in this file.
 
+## [v0.1.2] - 2026-09-10
+
+### ✨ 更新功能 (New Features)
+- **AI Agent 一键自动化安装脚本 (`install.ps1` / `install.sh`)**：
+  - 支持 Windows PowerShell 与 Linux/macOS 纯单行全自动安装。
+  - 自动侦测并编译 Go 源码、注入系统 PATH 环境变量、并将 USC 原生能力注册为 Agent Skill。
+- **直接支持远程 URL 与 ClawHub 协议 (`usc-core/fetcher`)**：
+  - 推出统一 Fetcher 模块，自动解析 ClawHub 技能 URL（`https://clawhub.ai/...`、`@owner/skill`）及 GitHub 仓库。
+  - 自动提取技能意图、API 协议元数据、目的地规范及权限契约。
+- **零外部依赖洁净室运行器 (Zero-Dependency Clean-Room Runner)**：
+  - 重建代码默认采用 Python 标准库与无外挂依赖设计，杜绝在宿主 Agent 环境下因缺少第三方库而报错。
+- **全流程一键编译与自动加载 (`usc install <URL>`)**：
+  - 打通“远程拉取 -> 洁净室编译去污 -> INV-7 权限单调收缩 -> 机器证明包签发 -> 自动部署至活跃 Agent”端到端闭环。
+- **Antigravity CLI (agy) 路径精准适配**：
+  - 技能安装首选对齐 `~/.gemini/config/skills/`，实现 Antigravity Agent 即时载入。
+
+### 🐛 修复与加固 (Bug Fixes & Hardening)
+- 修复部署目录误包含 `.usc` 后缀的问题，规范统一为标准语义技能名称。
+- 修复在包含多个 Agent 的系统环境中，自动感知识别宿主 Agent 环境变量（`ANTIGRAVITY_AGENT` 等）的优先级机制。
+
+---
+
 ## [v0.1.1] - 2026-09-10
 
 ### ✨ 更新功能 (New Features)

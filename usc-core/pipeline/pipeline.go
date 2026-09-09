@@ -20,6 +20,9 @@ import (
 type PipelineState struct {
 	SkillName        string
 	SourceDigest     string
+	SourceDir        string
+	SourceURL        string
+	TargetPlatform   string
 	DeclaredIntent   intent.DeclaredIntent
 	ObservedBehavior *intent.ObservedBehavior
 	DecontamReport   *intent.DecontaminationReport
@@ -44,27 +47,13 @@ func NewPipelineState(skillName, srcDigest string) *PipelineState {
 
 // RunIngest executes Stage 1: INGEST (10%).
 func (p *PipelineState) RunIngest(sourcePath string) error {
+	p.SourceDir = sourcePath
+	steps, facts := extractIngestMetadata(p.SkillName, sourcePath)
 	p.DeclaredIntent = intent.DeclaredIntent{
 		SkillName: p.SkillName,
-		Steps: []intent.DeclaredStep{
-			{StepID: "main_step", Action: "http.get", Target: "api.github.com"},
-		},
+		Steps:     steps,
 	}
-	p.ObservedBehavior = intent.NewObservedBehavior(p.SkillName, []intent.ObservedFact{
-		{
-			FactID: "obs_1",
-			Capability: capability.Capability{
-				CapabilityID: "cap_obs_1",
-				Kind:         capability.KindNetHTTP,
-				Actions:      []string{"GET"},
-				Resource: capability.Resource{
-					Scheme: "https",
-					Host:   capability.HostSpec{Type: "EXACT", Value: "api.github.com"},
-					Path:   "/repos/*/pulls/*",
-				},
-			},
-		},
-	})
+	p.ObservedBehavior = intent.NewObservedBehavior(p.SkillName, facts)
 	_, _, err := p.Ledger.Append(audit.StageIngest, "RULE_SOURCE_TAINT", audit.DecisionPass, "Ingested source files under TAINTED_UNTRUSTED")
 	return err
 }
@@ -146,9 +135,11 @@ func (p *PipelineState) RunAttest(distDir string, privKey ed25519.PrivateKey, ke
 		Schema:  "https://usc.dev/spec/v0.1/attestation.json",
 		Version: "0.1.0",
 		Artifact: attestation.ArtifactInfo{
-			Name:           p.SkillName + ".usc",
+			Name:           p.SkillName,
 			SHA256:         "sha256:" + p.SourceDigest,
-			TargetPlatform: "hermes",
+			TargetPlatform: p.TargetPlatform,
+			SourceDir:      p.SourceDir,
+			SourceURL:      p.SourceURL,
 		},
 		Claims: attestation.Claims{
 			SourceTaintQuarantined:            true,
