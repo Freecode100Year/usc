@@ -30,25 +30,32 @@ func (a *CodexAdapter) DetectInstalled() (string, bool) {
 		return "", false
 	}
 	p := filepath.Join(home, ".codex", "tools")
-	if _, err := os.Stat(filepath.Dir(p)); err == nil {
-		return p, true
+	bins := []string{"codex", "codex.cmd", "codex.exe"}
+	cfgs := []string{
+		filepath.Join(home, ".codex", "config.json"),
+		filepath.Join(home, ".codex", "codex.json"),
 	}
-	return filepath.Join(home, ".codex", "tools"), false
+	detected := CheckBinaryOrConfig(bins, cfgs)
+	return p, detected
 }
 
 func (a *CodexAdapter) GenerateBundle(att *attestation.Attestation, bp capability.Set, outDir string) (string, error) {
-	targetDir := filepath.Join(outDir, "codex-"+att.Artifact.Name)
+	skillName := CleanSkillName(att.Artifact.Name)
+	if err := ValidateSkillName(skillName); err != nil {
+		return "", err
+	}
+	targetDir := filepath.Join(outDir, "codex-"+skillName)
 	if err := os.MkdirAll(targetDir, 0755); err != nil {
 		return "", err
 	}
 	fnDef := fmt.Sprintf(`{
   "type": "function",
   "function": {
-    "name": "%s",
+    "name": %q,
     "description": "USC zero-trust verified tool for %s",
     "parameters": { "type": "object", "properties": { "action": { "type": "string" } } }
   }
-}`, att.Artifact.Name, att.Artifact.Name)
+}`, skillName, skillName)
 	if err := os.WriteFile(filepath.Join(targetDir, "function.json"), []byte(fnDef), 0644); err != nil {
 		return "", err
 	}
@@ -64,9 +71,6 @@ func (a *CodexAdapter) Install(bundleDir string, destDir string) (string, error)
 		dest, _ := a.DetectInstalled()
 		destDir = dest
 	}
-	if err := os.MkdirAll(destDir, 0755); err != nil {
-		return "", err
-	}
-	finalPath := filepath.Join(destDir, filepath.Base(bundleDir))
-	return finalPath, copyDirectory(bundleDir, finalPath)
+	skillName := CleanSkillName(filepath.Base(bundleDir))
+	return SafeInstallDirectory(bundleDir, destDir, skillName)
 }

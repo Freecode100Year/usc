@@ -31,18 +31,20 @@ func (a *AGYCLIAdapter) DetectInstalled() (string, bool) {
 		return "", false
 	}
 	cfgPath := filepath.Join(home, ".gemini", "config", "skills")
-	if _, err := os.Stat(filepath.Dir(cfgPath)); err == nil {
-		return cfgPath, true
+	bins := []string{"agy", "agy.exe", "antigravity", "antigravity.exe"}
+	cfgs := []string{
+		filepath.Join(home, ".gemini", "antigravity-cli"),
+		filepath.Join(home, ".agents"),
 	}
-	cliPath := filepath.Join(home, ".gemini", "antigravity-cli", "skills")
-	if _, err := os.Stat(filepath.Dir(cliPath)); err == nil {
-		return cliPath, true
-	}
-	return cfgPath, false
+	detected := CheckBinaryOrConfig(bins, cfgs)
+	return cfgPath, detected
 }
 
 func (a *AGYCLIAdapter) GenerateBundle(att *attestation.Attestation, bp capability.Set, outDir string) (string, error) {
 	skillName := CleanSkillName(att.Artifact.Name)
+	if err := ValidateSkillName(skillName); err != nil {
+		return "", err
+	}
 	targetDir := filepath.Join(outDir, skillName)
 	if err := os.MkdirAll(targetDir, 0755); err != nil {
 		return "", err
@@ -60,11 +62,8 @@ func (a *AGYCLIAdapter) Install(bundleDir string, destDir string) (string, error
 		dest, _ := a.DetectInstalled()
 		destDir = dest
 	}
-	if err := os.MkdirAll(destDir, 0755); err != nil {
-		return "", err
-	}
-	finalPath := filepath.Join(destDir, filepath.Base(bundleDir))
-	return finalPath, copyDirectory(bundleDir, finalPath)
+	skillName := CleanSkillName(filepath.Base(bundleDir))
+	return SafeInstallDirectory(bundleDir, destDir, skillName)
 }
 
 func buildAGYSkillMD(att *attestation.Attestation, skillName string) string {
@@ -115,6 +114,6 @@ func copySourceAssets(srcDir, targetDir string) {
 	}
 	srcScripts := filepath.Join(srcDir, "scripts")
 	if info, err := os.Stat(srcScripts); err == nil && info.IsDir() {
-		_ = copyDirectory(srcScripts, filepath.Join(targetDir, "scripts"))
+		_ = SafeCopyDirectory(srcScripts, filepath.Join(targetDir, "scripts"))
 	}
 }

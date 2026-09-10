@@ -1,0 +1,35 @@
+name: USC CI Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Test & Verify (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
+        go-version: [ '1.22.x', '1.23.x' ]
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ matrix.go-version }}
+        cache: true
+
+    - name: Verify Go Modules
+      run: go mod verify
+
+    - name: Build USC Binary
+      run: go build -v ./cmd/usc
+
+    - name: Run All Unit Tests & Security Suite
+      run: go test -v -race ./...

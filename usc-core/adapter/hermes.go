@@ -30,19 +30,26 @@ func (a *HermesAdapter) DetectInstalled() (string, bool) {
 		return "", false
 	}
 	p := filepath.Join(home, ".hermes", "skills")
-	if _, err := os.Stat(filepath.Dir(p)); err == nil {
-		return p, true
+	bins := []string{"hermes", "hermes.cmd", "hermes.exe"}
+	cfgs := []string{
+		filepath.Join(home, ".hermes", "config.yaml"),
+		filepath.Join(home, ".hermes", "hermes.json"),
 	}
-	return filepath.Join(home, ".hermes", "skills"), false
+	detected := CheckBinaryOrConfig(bins, cfgs)
+	return p, detected
 }
 
 func (a *HermesAdapter) GenerateBundle(att *attestation.Attestation, bp capability.Set, outDir string) (string, error) {
-	targetDir := filepath.Join(outDir, "hermes-"+att.Artifact.Name)
+	skillName := CleanSkillName(att.Artifact.Name)
+	if err := ValidateSkillName(skillName); err != nil {
+		return "", err
+	}
+	targetDir := filepath.Join(outDir, "hermes-"+skillName)
 	if err := os.MkdirAll(targetDir, 0755); err != nil {
 		return "", err
 	}
-	manifest := fmt.Sprintf(`{"name":"%s","version":"%s","engine":"usc-hermes","attested":true}`,
-		att.Artifact.Name, att.Version)
+	manifest := fmt.Sprintf(`{"name":%q,"version":"%s","engine":"usc-hermes","attested":true}`,
+		skillName, att.Version)
 	if err := os.WriteFile(filepath.Join(targetDir, "manifest.json"), []byte(manifest), 0644); err != nil {
 		return "", err
 	}
@@ -58,9 +65,6 @@ func (a *HermesAdapter) Install(bundleDir string, destDir string) (string, error
 		dest, _ := a.DetectInstalled()
 		destDir = dest
 	}
-	if err := os.MkdirAll(destDir, 0755); err != nil {
-		return "", err
-	}
-	finalPath := filepath.Join(destDir, filepath.Base(bundleDir))
-	return finalPath, copyDirectory(bundleDir, finalPath)
+	skillName := CleanSkillName(filepath.Base(bundleDir))
+	return SafeInstallDirectory(bundleDir, destDir, skillName)
 }

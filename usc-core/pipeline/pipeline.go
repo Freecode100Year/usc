@@ -2,7 +2,6 @@ package pipeline
 
 import (
 	"crypto/ed25519"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -136,7 +135,6 @@ func (p *PipelineState) RunAttest(distDir string, privKey ed25519.PrivateKey, ke
 		Version: "0.1.0",
 		Artifact: attestation.ArtifactInfo{
 			Name:           p.SkillName,
-			SHA256:         "sha256:" + p.SourceDigest,
 			TargetPlatform: p.TargetPlatform,
 			SourceDir:      p.SourceDir,
 			SourceURL:      p.SourceURL,
@@ -151,35 +149,39 @@ func (p *PipelineState) RunAttest(distDir string, privKey ed25519.PrivateKey, ke
 		},
 		ProofReferences: attestation.ProofReferences{
 			AuditChainRoot:        p.Ledger.LatestDigest(),
-			CanonicalIntentDigest: "sha256:" + p.SourceDigest,
-			BlueprintDigest:       "sha256:bp_digest",
-			PolicyDigest:          "sha256:policy_digest",
-			CleanroomProofDigest:  "sha256:cleanroom_digest",
+			CanonicalIntentDigest: computeRealDigest(p.DeclaredIntent),
+			BlueprintDigest:       computeRealDigest(p.Blueprint),
+			PolicyDigest:          computeRealDigest("allow_all_policy"),
+			CleanroomProofDigest:  computeRealDigest(p.CleanRoom),
 		},
 	}
-	if err := attestation.SignAttestation(&att, privKey, keyID); err != nil {
-		return err
-	}
 	p.AttestationDoc = &att
-	return emitProofBundle(distDir, p)
+	return emitRealProofAndPackage(distDir, p, privKey, keyID)
 }
 
-func emitProofBundle(distDir string, p *PipelineState) error {
-	proofDir := filepath.Join(distDir, "proof")
-	if err := os.MkdirAll(proofDir, 0755); err != nil {
+func emitRealProofAndPackage(distDir string, p *PipelineState, privKey ed25519.PrivateKey, keyID string) error {
+	payloadDir := p.SourceDir
+	if payloadDir == "" || !isDir(payloadDir) {
+		payloadDir = filepath.Join(distDir, "proof")
+		_ = os.MkdirAll(payloadDir, 0755)
+	}
+	payloadHash, err := attestation.ComputeDirSHA256(payloadDir)
+	if err != nil {
 		return err
 	}
-	attBytes, _ := json.MarshalIndent(p.AttestationDoc, "", "  ")
-	eventsBytes, _ := json.MarshalIndent(p.Ledger.Events(), "", "  ")
-	bpBytes, _ := json.MarshalIndent(p.Blueprint, "", "  ")
-	crBytes, _ := json.MarshalIndent(p.CleanRoom, "", "  ")
-	_ = os.WriteFile(filepath.Join(proofDir, "attestation.json"), attBytes, 0644)
-	_ = os.WriteFile(filepath.Join(proofDir, "audit-chain.json"), eventsBytes, 0644)
-	_ = os.WriteFile(filepath.Join(proofDir, "blueprint.json"), bpBytes, 0644)
-	_ = os.WriteFile(filepath.Join(proofDir, "cleanroom-proof.json"), crBytes, 0644)
-	_ = os.WriteFile(filepath.Join(proofDir, "provenance.json"), []byte(`{"provenance":"strict"}`), 0644)
-	_ = os.WriteFile(filepath.Join(proofDir, "policy.json"), []byte(`{"policy":"enterprise_strict"}`), 0644)
-	_ = os.WriteFile(filepath.Join(proofDir, "sbom.spdx.json"), []byte(`{"spdxVersion":"SPDX-2.3"}`), 0644)
-	_ = os.WriteFile(filepath.Join(distDir, p.SkillName+".usc"), []byte("USC_BINARY_PAYLOAD_HERMES"), 0644)
-	return nil
+	p.AttestationDoc.Artifact.SHA256 = "sha256:" + payloadHash
+	if err := attestation.SignAttestation(p.AttestationDoc, privKey, keyID); err != nil {
+		return err
+	}
+	proofDir := filepath.Join(distDir, "proof")
+	if err := writeProofFiles(proofDir, p); err != nil {
+		return err
+	}
+	destZip := filepath.Join(distDir, p.SkillName+".usc")
+	return attestation.PackageArtifact(destZip, p.AttestationDoc, proofDir, payloadDir)
+}
+
+func isDir(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }

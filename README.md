@@ -5,12 +5,28 @@
 
 ---
 
-## 📌 最新更新日志 [v0.1.3] - 2026-09-10 (置顶)
+## 📌 最新更新日志 [v0.2.0] - 2026-09-10 (置顶)
+
+### ✨ 更新功能 (New Features)
+- **零信任密码学构件体系 (`usc-core/attestation`)**：
+  - 落地真实 Ed25519 密码学签名容器与验证体系，建立持久化公钥信任库（`~/.usc/keys/` 与 `~/.usc/trust/`），实现构件防篡改与来源追溯。
+  - `usc verify <artifact.usc>` 真实核验 SHA-256 复合散列与证明义务，发现篡改立即熔断。
+  - `usc install` 强制前置执行密码学自检验签，拒绝未通过验证的构件进入宿主 Agent。
+- **开源供应链全面加固**：
+  - 引入标准 **Apache 2.0 开源许可证**（`LICENSE`）；
+  - 配置 GitHub Actions 跨平台（Ubuntu, Windows, macOS）自动化 CI 测试流水线（`.github/workflows/ci.yml`）；
+  - 制定正规安全漏洞披露政策（`.github/SECURITY.md`）。
+- **OpenClaw 生态原生格式对齐**：
+  - 输出带有标准 YAML Frontmatter 的 `SKILL.md`，完美兼容 OpenClaw 官方规范与 `skill_workshop` 安全重写流程。
 
 ### 🐛 修正的 Bug (Bug Fixes & Hardening)
-- **标准 CLI `--help` / `-h` / `help` 与 `--version` 支持**：修复执行 `usc --help` 被当作未知指令的缺陷，规范打印完整使用参数并返回状态码 0。
-- **自动化脚本退出状态码（Exit Code）规范化**：修复未知子命令、参数缺失或流程异常时仍返回 0 的缺陷，严格返回非零错误码（退出码 1），防止 CI/CD 与 Agent 脚本误判执行状态。
-- **全阶段异常严格熔断**：构建流水线中任一阶段（Ingest/Decontam/Minimize/Rebuild/Attest）失败立即阻断并退出，严禁静默吞错。
+- **彻底根除假验证与伪造 Attestation**：修复 `usc verify` 不读文件仍返回 PASS、`usc install` 根据文件名伪造证明的严重隐患，现全量接入真实密码学解包核验。
+- **全流程静态分析真实绑定**：修复 `usc build` 阶段忽略错误与硬编码摘要，现真实计算代码与意图 SHA-256 签名。
+- **防御 Shell 命令注入漏洞**：`claudecode` 适配器全面参数化安全传参，并引入技能名称正则白名单约束（`^[a-zA-Z0-9_-]+$`）。
+- **防御符号链接越权攻击**：文件拷贝全面拦截符号链接，写入前清理潜在恶意链接，杜绝文件截断。
+- **防御已有技能覆盖损毁**：安装已有技能时自动生成时间戳备份（`*.bak.<timestamp>`），支持无损回退。
+- **修复自动化脚本退出码与 `--help` 兼容**：未知命令或验证失败严格返回非零错误码（1），`--help` 规范返回 0。
+- **加固 `loop-runner.sh` 提权隔离**：移除默认 `--dangerously-skip-permissions`，默认启用安全隔离模式。
 
 ---
 
@@ -71,7 +87,7 @@ USC 采用解耦适配器架构 (`usc-core/adapter`)，自动识别主机已安�
 | Agent 运行时 | 目标标识 | 自动侦测路径 | 原生适配规范文件 |
 | :--- | :--- | :--- | :--- |
 | **Antigravity CLI (agy)** | `agycli` | `~/.gemini/config/skills/` (推荐) / `~/.gemini/antigravity-cli/skills/` | `SKILL.md` (标准 Frontmatter), `scripts/` |
-| **OpenClaw** | `openclaw` | `~/.openclaw/skills/` | `skill.yaml`, `runner.py` |
+| **OpenClaw** | `openclaw` | `~/.openclaw/skills/` | `SKILL.md` (标准 Frontmatter), `scripts/` |
 | **Claude Code** | `claudecode` | `~/.claude/skills/` | `tool.json`, `execute.sh` |
 | **Hermes Agent** | `hermes` | `~/.hermes/skills/` | `manifest.json`, `index.js` |
 | **OpenAI Codex** | `codex` | `~/.codex/tools/` | `function.json`, `index.js` |

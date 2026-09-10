@@ -38,14 +38,30 @@ find_cli() {
     fi
 }
 
+# 权限与沙箱控制配置 (默认安全模式,禁止未经许可的无限制提权)
+ALLOW_DANGEROUS_PERMISSIONS="${ALLOW_DANGEROUS_PERMISSIONS:-false}"
+
 run_agent() {
     local prompt_content=$1
+    local perm_flag=""
+    if [ "$ALLOW_DANGEROUS_PERMISSIONS" = "true" ]; then
+        perm_flag="--dangerously-skip-permissions"
+    fi
+
     case "$AGENT_CLI" in
         agy)
-            $(find_cli agy) --dangerously-skip-permissions --print "$prompt_content"
+            if [ -n "$perm_flag" ]; then
+                $(find_cli agy) "$perm_flag" --print "$prompt_content"
+            else
+                $(find_cli agy) --print "$prompt_content"
+            fi
             ;;
         claude)
-            $(find_cli claude) --dangerously-skip-permissions -p "$prompt_content"
+            if [ -n "$perm_flag" ]; then
+                $(find_cli claude) "$perm_flag" -p "$prompt_content"
+            else
+                $(find_cli claude) -p "$prompt_content"
+            fi
             ;;
         hermes)
             $(find_cli hermes) chat -q "$prompt_content"

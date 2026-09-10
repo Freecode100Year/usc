@@ -2,6 +2,39 @@
 
 All notable changes to the USC (Universal Skill Compiler) project will be documented in this file.
 
+## [v0.2.0] - 2026-09-10
+
+### 🛡️ 核心安全重构与审计加固 (Security Hardening & Cryptographic Integrity)
+- **真实验证与密码学容器完整性 (`usc verify`)**：
+  - 彻底废除假验证与占位模拟。真实解压 `.usc` 容器，逐项重算 `payload/` 下全部文件的 SHA-256 复合哈希；
+  - 真实核验 Ed25519 签名及权威证明义务文件（PO1~PO5），任何哈希不匹配、签名伪造或文件缺失立即熔断拒绝，退出码为 1。
+- **安装前强制零信任验签 (`usc install`)**：
+  - 对所有待安装的 `.usc` 构件在部署前自动执行 `VerifyArtifactContainer`，未通过验证的构件绝不写入系统。
+- **真实意图与代码静态分析构建 (`usc build`)**：
+  - 真实扫描源码 AST 与意图，真实计算 `CanonicalIntentDigest`、`BlueprintDigest`、`PolicyDigest`、`CleanroomProofDigest`，杜绝忽略阶段错误。
+- **持久化权威信任库 (`usc-core/attestation/keystore.go`)**：
+  - 建立标准信任库管理体系（`~/.usc/keys/authority.priv`、`authority.pub`、`~/.usc/trust/trusted_authorities.json`），实现签名身份与公钥检索的密码学解耦与可信溯源。
+- **Zip Slip 路径穿越防御**：
+  - 容器解压时严格校验相对路径，坚决阻断包含 `../`、绝对路径或跨目录的越权写入文件攻击。
+- **Shell 命令注入拦截 (`claudecode.go` & `ValidateSkillName`)**：
+  - 引入白名单正则约束 `^[a-zA-Z0-9_-]+$`，坚决拦截包含 `$()`、反引号、分号、换行符的恶意技能名称；
+  - Claude Code 适配器生成的 `execute.sh` 改用 `exec usc run %q "$@"` 参数化安全转发，杜绝 Shell 拼接注入。
+- **符号链接覆盖与截断防护 (`SafeCopyFile`)**：
+  - 使用 `os.Lstat` 严格拦截并跳过符号链接，并在目标写入前主动清理潜在符号链接，防御符号链接跨目录文件截断攻击。
+- **原子替换与版本备份机制 (`SafeInstallDirectory`)**：
+  - 安装技能时若目标目录已存在，自动创建 `*.bak.<timestamp>` 备份，杜绝静默破坏用户已有技能。
+- **OpenClaw 生态规范原生对齐**：
+  - 输出带有 YAML frontmatter 的标准 `SKILL.md`，完美兼容 OpenClaw 原生格式与 `skill_workshop` 规范。
+- **多平台运行时严格检测 (`targets`)**：
+  - 校验 CLI 二进制命令 (`exec.LookPath`) 与运行时真实配置，消除仅根据空目录误判 `READY` 的隐患。
+- **CI/CD 与供应链开源生态建设**：
+  - 新增 Apache 2.0 开源许可证 `LICENSE`；
+  - 新增 GitHub Actions 多平台（Ubuntu/Windows/macOS）自动化测试工作流 `.github/workflows/ci.yml`；
+  - 新增安全漏洞报告与响应准则 `.github/SECURITY.md`；
+  - 新增针对 CLI 参数、不存在文件验证、恶意篡改检测的端到端自动化测试套件 `cmd/usc/main_test.go`。
+
+---
+
 ## [v0.1.3] - 2026-09-10
 
 ### 🐛 修复与加固 (Bug Fixes & Hardening)

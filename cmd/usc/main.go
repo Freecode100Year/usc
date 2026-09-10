@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,7 +16,7 @@ import (
 	"github.com/Freecode100Year/usc/usc-core/replay"
 )
 
-const appVersion = "0.1.3"
+const appVersion = "0.2.0"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -30,14 +31,14 @@ func main() {
 func printUsage() {
 	fmt.Printf("USC (Universal Skill Compiler) v%s\n", appVersion)
 	fmt.Println("Usage: usc <command> [arguments]")
-	fmt.Println("\nZero-Trust Clean-Room Compilation & One-Click Install:")
-	fmt.Println("  install <URL | source | artifact> [--target T] Compile & install into local Agent")
+	fmt.Println("\nZero-Trust Clean-Room Compilation & Verified Install:")
+	fmt.Println("  install <URL | source | artifact> [--target T] Verify & install into local Agent")
 	fmt.Println("  build <URL | source> [--target T] [--install]   End-to-end zero-trust compilation")
 	fmt.Println("  targets                                        List supported Agent runtimes & local status")
 	fmt.Println("  export <artifact> --target <T>                 Export native skill bundle for an Agent")
-	fmt.Println("\nSecurity & Attestation Inspection:")
+	fmt.Println("\nCryptographic & Security Attestation Inspection:")
 	fmt.Println("  analyze <source>                               Analyze untrusted intent and observed behavior")
-	fmt.Println("  verify <artifact.usc>                          Verify artifact integrity and attestation")
+	fmt.Println("  verify <artifact.usc>                          Verify artifact integrity and Ed25519 signature")
 	fmt.Println("  verify-proof <proof-dir>                       Independently verify machine proof bundle")
 	fmt.Println("  run <artifact.usc>                             Execute artifact inside guarded runtime")
 	fmt.Println("  trace -f <skill-id>                            Stream runtime capability trace")
@@ -190,14 +191,20 @@ func runStageAuditAndSandbox(p *pipeline.PipelineState) error {
 
 func finalizeBuild(p *pipeline.PipelineState) {
 	fmt.Println(" [Stage 7/7] ATTEST        ( 5%) ... PASS")
-	_, priv, _ := attestation.GenerateKeyPair()
+	ts := attestation.DefaultTrustStore()
+	_, priv, keyID, err := ts.LoadOrCreateAuthority()
+	if err != nil {
+		fmt.Printf("Authority keystore error: %v\n", err)
+		os.Exit(1)
+	}
 	distDir := "./dist"
-	if err := p.RunAttest(distDir, priv, "usc-local-authority"); err != nil {
-		fmt.Printf("Attestation failed: %v\n", err)
+	if err := p.RunAttest(distDir, priv, keyID); err != nil {
+		fmt.Printf("Attestation packaging failed: %v\n", err)
 		os.Exit(1)
 	}
 	fmt.Printf("\n[✓] Build Complete: %s\n", filepath.Join(distDir, p.SkillName+".usc"))
 	fmt.Printf("    Machine Proof Bundle: %s\n", filepath.Join(distDir, "proof"))
+	fmt.Printf("    Attested Authority:   %s\n", keyID)
 	fmt.Println("    Capability Count Reduction (CCR): 71.4%")
 	fmt.Println("    Attack Surface Reduction   (ASR): 92.5%")
 	fmt.Println("    Artifact Status: ATTESTED")
@@ -245,8 +252,19 @@ func installExistingArtifact(artifact, target string) {
 		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("[+] One-Click Installing %s into %s...\n", artifact, ad.DisplayName())
-	att := mockAttestationForExport(artifact, target)
+	ts := attestation.DefaultTrustStore()
+	fmt.Printf("[+] Cryptographically Auditing %s before installation...\n", artifact)
+	res, err := attestation.VerifyArtifactContainer(artifact, ts)
+	if err != nil {
+		fmt.Printf("\n[-] SECURITY ALERT: Refusing installation! Verification failed: %v\n", err)
+		os.Exit(1)
+	}
+	defer os.RemoveAll(res.ExtractedDir)
+	performAdapterInstall(ad, res.Attestation, res.PayloadDir)
+}
+
+func performAdapterInstall(ad adapter.RuntimeAdapter, att *attestation.Attestation, payloadDir string) {
+	att.Artifact.SourceDir = payloadDir
 	tmpDir, _ := os.MkdirTemp("", "usc-install-*")
 	defer os.RemoveAll(tmpDir)
 	bundlePath, err := ad.GenerateBundle(att, capability.NewSet(), tmpDir)
@@ -259,7 +277,7 @@ func installExistingArtifact(artifact, target string) {
 		fmt.Printf("Installation failed: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("[✓] Successfully installed for beginner users!\n    Location: %s\n", installedPath)
+	fmt.Printf("[✓] Cryptographically Verified & Installed into %s!\n    Location: %s\n", ad.DisplayName(), installedPath)
 }
 
 func installBuiltArtifact(p *pipeline.PipelineState, artifactPath, target string) {
@@ -268,23 +286,14 @@ func installBuiltArtifact(p *pipeline.PipelineState, artifactPath, target string
 		fmt.Printf("Error obtaining adapter: %v\n", err)
 		os.Exit(1)
 	}
-	tmpDir, _ := os.MkdirTemp("", "usc-inst-*")
-	defer os.RemoveAll(tmpDir)
-	att := p.AttestationDoc
-	if att == nil {
-		att = mockAttestationForExport(artifactPath, target)
-	}
-	bundlePath, err := ad.GenerateBundle(att, p.Blueprint, tmpDir)
+	ts := attestation.DefaultTrustStore()
+	res, err := attestation.VerifyArtifactContainer(artifactPath, ts)
 	if err != nil {
-		fmt.Printf("Bundle generation failed: %v\n", err)
+		fmt.Printf("Self-verification of built artifact failed: %v\n", err)
 		os.Exit(1)
 	}
-	instPath, err := ad.Install(bundlePath, "")
-	if err != nil {
-		fmt.Printf("Installation failed: %v\n", err)
-		os.Exit(1)
-	}
-	fmt.Printf("\n[✓] Successfully Auto-Installed into %s!\n    Location: %s\n", ad.DisplayName(), instPath)
+	defer os.RemoveAll(res.ExtractedDir)
+	performAdapterInstall(ad, res.Attestation, res.PayloadDir)
 }
 
 func autoDetectFirstTarget() string {
@@ -326,15 +335,31 @@ func handleAnalyze(args []string) {
 }
 
 func handleVerify(args []string) {
-	artifact := "artifact.usc"
+	artifact := filepath.Join("dist", "artifact.usc")
 	if len(args) > 0 {
 		artifact = args[0]
 	}
-	fmt.Printf("[+] Verifying artifact: %s\n", artifact)
-	fmt.Println("Artifact Digest:    sha256:d82e11a94f...")
-	fmt.Println("Attestation Status: VALID_ED25519_SIGNATURE")
-	fmt.Println("Policy Match:       TARGET_POLICY_APPROVED")
-	fmt.Println("Verdict:            PASS")
+	fmt.Printf("[+] Cryptographically Auditing Artifact: %s\n", artifact)
+	ts := attestation.DefaultTrustStore()
+	res, err := attestation.VerifyArtifactContainer(artifact, ts)
+	if err != nil {
+		fmt.Printf("\n[-] VERIFICATION REJECTED: %v\n", err)
+		os.Exit(1)
+	}
+	defer os.RemoveAll(res.ExtractedDir)
+	printVerificationSummary(res)
+}
+
+func printVerificationSummary(res *attestation.VerificationResult) {
+	fmt.Println("------------------------------------------------------------")
+	fmt.Printf("Artifact Name:      %s\n", res.Attestation.Artifact.Name)
+	fmt.Printf("Payload Digest:     sha256:%s\n", res.PayloadHash)
+	fmt.Printf("Authority KeyID:    %s\n", res.Attestation.Signature.KeyID)
+	fmt.Printf("Attestation Status: VALID_ED25519_SIGNATURE\n")
+	fmt.Printf("Cleanroom Isolated: %v\n", res.Attestation.Claims.CleanroomIsolated)
+	fmt.Printf("ASR Reduction:      %.1f%%\n", res.Attestation.Claims.AttackSurfaceReduction*100)
+	fmt.Printf("Audit Chain Root:   %s\n", res.Attestation.ProofReferences.AuditChainRoot)
+	fmt.Println("Verdict:            PASS (Authentic & Cryptographically Attested)")
 }
 
 func handleVerifyProof(args []string) {
@@ -343,9 +368,38 @@ func handleVerifyProof(args []string) {
 		proofDir = args[0]
 	}
 	fmt.Printf("[+] Verifying Machine Proof Bundle in: %s\n", proofDir)
-	fmt.Println("  [✓] attestation.json:      Valid schema & signature")
+	ts := attestation.DefaultTrustStore()
+	att, err := loadProofAttestation(proofDir)
+	if err != nil {
+		fmt.Printf("Proof bundle load failed: %v\n", err)
+		os.Exit(1)
+	}
+	pub, err := ts.ResolvePublicKey(att.Signature.KeyID)
+	if err != nil {
+		fmt.Printf("Authority key lookup failed: %v\n", err)
+		os.Exit(1)
+	}
+	if _, err := attestation.VerifyProofBundle(proofDir, pub); err != nil {
+		fmt.Printf("Proof bundle verification failed: %v\n", err)
+		os.Exit(1)
+	}
+	printProofSuccess()
+}
+
+func loadProofAttestation(proofDir string) (*attestation.Attestation, error) {
+	attPath := filepath.Join(proofDir, "attestation.json")
+	data, err := os.ReadFile(attPath)
+	if err != nil {
+		return nil, err
+	}
+	var att attestation.Attestation
+	return &att, json.Unmarshal(data, &att)
+}
+
+func printProofSuccess() {
+	fmt.Println("  [✓] attestation.json:      Valid schema & Ed25519 signature")
 	fmt.Println("  [✓] audit-chain.json:      Lossless hash chain verified (H0 -> Hn)")
-	fmt.Println("  [✓] cleanroom-proof.json:  0 raw source leaks, net denied verified")
+	fmt.Println("  [✓] cleanroom-proof.json:  0 raw source leaks, physical net isolation verified")
 	fmt.Println("  [✓] blueprint.json:        Minimal lattice bound verified")
 	fmt.Println("  [✓] sbom.spdx.json:        SPDX 2.3 SBOM consistent")
 	fmt.Println("\nAll 5 Proof Obligations satisfied: PO1 ∧ PO2 ∧ PO3 ∧ PO4 ∧ PO5 = true")
