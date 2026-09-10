@@ -324,13 +324,27 @@ func autoDetectFirstTarget() string {
 	return adapter.TargetAGYCLI
 }
 
+func isDirPath(p string) bool {
+	fi, err := os.Stat(p)
+	return err == nil && fi.IsDir()
+}
+
 func handleAnalyze(args []string) {
-	source := "untrusted_skill"
-	if len(args) > 0 {
-		source = args[0]
+	if len(args) == 0 {
+		fmt.Println("Usage: usc analyze <source>")
+		os.Exit(1)
 	}
-	p := pipeline.NewPipelineState(filepath.Base(source), "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
-	_ = p.RunIngest(source)
+	source := args[0]
+	abs, err := filepath.Abs(source)
+	if err != nil || !isDirPath(abs) {
+		fmt.Printf("Error: Source directory not found: %s\n", source)
+		os.Exit(1)
+	}
+	p := pipeline.NewPipelineState(filepath.Base(abs), "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+	if err := p.RunIngest(abs); err != nil {
+		fmt.Printf("Ingest error: %v\n", err)
+		os.Exit(1)
+	}
 	_ = p.RunDecontaminate(100.0)
 	fmt.Printf("[+] Analyzing untrusted source: %s\n", source)
 	fmt.Println("------------------------------------------------------------")
@@ -497,19 +511,17 @@ func handleTrace(args []string) {
 }
 
 func handleReplay(args []string) {
-	tracePath := "trace.usctrace"
-	if len(args) > 0 && !strings.HasPrefix(args[0], "--") {
-		tracePath = args[0]
+	if len(args) == 0 {
+		fmt.Println("Usage: usc replay <trace.usctrace>")
+		os.Exit(1)
+	}
+	tracePath := args[0]
+	tf, err := loadTraceFile(tracePath)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
 	}
 	fmt.Printf("[+] Starting Deterministic Decision Replay for: %s\n", tracePath)
-	tf := &replay.TraceFile{
-		Version: "0.1.0",
-		SkillID: "weather-skill",
-		Events: []replay.TraceEvent{
-			{Index: 1, Target: "api.weather.gov", Action: "GET", Decision: "ALLOW"},
-			{Index: 2, Target: "telemetry.evil.com", Action: "POST", Decision: "DENY"},
-		},
-	}
 	policy := capability.NewSet(capability.Capability{
 		Kind:    capability.KindNetHTTP,
 		Actions: []string{"GET"},
@@ -520,6 +532,21 @@ func handleReplay(args []string) {
 	results, allMatch := replay.ReplayDecisions(tf, policy)
 	fmt.Print(replay.FormatReplaySummary(results))
 	fmt.Printf("Deterministic Replay Integrity: %v (All steps bit-exact)\n", allMatch)
+}
+
+func loadTraceFile(path string) (*replay.TraceFile, error) {
+	if _, err := os.Stat(path); err != nil {
+		return nil, fmt.Errorf("trace file not found: %s", path)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var tf replay.TraceFile
+	if err := json.Unmarshal(data, &tf); err != nil {
+		return nil, fmt.Errorf("invalid trace format: %w", err)
+	}
+	return &tf, nil
 }
 
 func handleTop() {

@@ -77,3 +77,18 @@ func TestCLIExportNonExistent(t *testing.T) {
 	}
 }
 
+func TestCLIAnalyzeMissing(t *testing.T) {
+	out, code := runCLI(t, "analyze", "missing_dir_path")
+	if code != 1 || !strings.Contains(out, "Source directory not found") {
+		t.Fatalf("expected code 1 for missing analyze dir, got %d, out: %s", code, out)
+	}
+}
+
+func TestCLIReplayMissing(t *testing.T) {
+	out, code := runCLI(t, "replay", "missing_trace.usctrace")
+	if code != 1 || !strings.Contains(out, "trace file not found") {
+		t.Fatalf("expected code 1 for missing replay trace, got %d, out: %s", code, out)
+	}
+}
+
+
