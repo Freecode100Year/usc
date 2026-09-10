@@ -27,11 +27,21 @@ All notable changes to the USC (Universal Skill Compiler) project will be docume
   - 输出带有 YAML frontmatter 的标准 `SKILL.md`，完美兼容 OpenClaw 原生格式与 `skill_workshop` 规范。
 - **多平台运行时严格检测 (`targets`)**：
   - 校验 CLI 二进制命令 (`exec.LookPath`) 与运行时真实配置，消除仅根据空目录误判 `READY` 的隐患。
+- **真实静态代码分析与意图提取引擎 (`ingest_helper.go`)**：
+  - 彻底淘汰硬编码与单一 `metadata.json` 依赖，深度支持 `SKILL.md`（YAML frontmatter 与 Markdown 意图）、`skill.yaml` 及源文件自动扫描；
+  - 递归静态扫描 Python / Shell / JS 源文件，真实识别代码中实际引用的外部网络请求主机、敏感文件路径与系统调用，生成真实的 `ObservedFact`，使去污分析与越权检测真正具备实际防御能力。
+- **真实受控运行器 (`usc run`)**：
+  - 运行前必须经过密码学强验签，拒绝损坏或篡改的构件；
+  - 自动识别并隔离执行 Payload 中的 `runner.py` / `main.py` / `execute.sh` 等脚本；对声明式技能输出标准调用规范。
+- **真实构件原生导出 (`usc export`)**：
+  - 彻底删除 `mockAttestationForExport`，必须经过真实密码学验签后，才导出目标 Agent 的原生 Bundle。
+- **动态实时仪表盘 (`usc top`)**：
+  - 动态统计已注册的权威信任公钥数与各平台本地已安装技能数。
 - **CI/CD 与供应链开源生态建设**：
   - 新增 Apache 2.0 开源许可证 `LICENSE`；
   - 新增 GitHub Actions 多平台（Ubuntu/Windows/macOS）自动化测试工作流 `.github/workflows/ci.yml`；
   - 新增安全漏洞报告与响应准则 `.github/SECURITY.md`；
-  - 新增针对 CLI 参数、不存在文件验证、恶意篡改检测的端到端自动化测试套件 `cmd/usc/main_test.go`。
+  - 新增针对 CLI 参数、不存在文件验证、恶意篡改检测及真实静态分析的端到端自动化测试套件 `cmd/usc/main_test.go` 与 `usc-core/pipeline/ingest_test.go`。
 
 ---
 

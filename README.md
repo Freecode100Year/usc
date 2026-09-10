@@ -12,6 +12,13 @@
   - 落地真实 Ed25519 密码学签名容器与验证体系，建立持久化公钥信任库（`~/.usc/keys/` 与 `~/.usc/trust/`），实现构件防篡改与来源追溯。
   - `usc verify <artifact.usc>` 真实核验 SHA-256 复合散列与证明义务，发现篡改立即熔断。
   - `usc install` 强制前置执行密码学自检验签，拒绝未通过验证的构件进入宿主 Agent。
+- **静态代码分析与真实意图提取 (`usc-core/pipeline/ingest_helper.go`)**：
+  - 深度扫描 `SKILL.md`（YAML frontmatter 与 Markdown 意图）、`skill.yaml` 及源文件；
+  - 递归静态扫描 Python / Shell / JS 源文件，真实识别代码中实际引用的网络请求、文件系统与环境变量，构造真实行为事实（ObservedFact），使去污分析与越权拦截真正生效。
+- **真实受控运行器 (`usc run`) 与真实导出 (`usc export`)**：
+  - `usc run` 真实验签并隔离执行 Payload 中的脚本进程，杜绝虚假控制台打印；
+  - `usc export` 彻底剔除伪造 Attestation，通过密码学校验后导出目标 Agent 原生 Bundle；
+  - `usc top` 动态展示已注册权威信任公钥与全平台已安装技能统计。
 - **开源供应链全面加固**：
   - 引入标准 **Apache 2.0 开源许可证**（`LICENSE`）；
   - 配置 GitHub Actions 跨平台（Ubuntu, Windows, macOS）自动化 CI 测试流水线（`.github/workflows/ci.yml`）；
@@ -20,8 +27,8 @@
   - 输出带有标准 YAML Frontmatter 的 `SKILL.md`，完美兼容 OpenClaw 官方规范与 `skill_workshop` 安全重写流程。
 
 ### 🐛 修正的 Bug (Bug Fixes & Hardening)
-- **彻底根除假验证与伪造 Attestation**：修复 `usc verify` 不读文件仍返回 PASS、`usc install` 根据文件名伪造证明的严重隐患，现全量接入真实密码学解包核验。
-- **全流程静态分析真实绑定**：修复 `usc build` 阶段忽略错误与硬编码摘要，现真实计算代码与意图 SHA-256 签名。
+- **彻底根除假验证与伪造 Attestation**：修复 `usc verify` 不读文件仍返回 PASS、`usc install` 根据文件名伪造证明、`usc export` 伪造 Attestation 的严重隐患，现全量接入真实密码学解包核验。
+- **全流程静态分析真实绑定**：修复 `usc build` 阶段忽略错误与硬编码摘要，现真实扫描源码并计算代码与意图 SHA-256 签名。
 - **防御 Shell 命令注入漏洞**：`claudecode` 适配器全面参数化安全传参，并引入技能名称正则白名单约束（`^[a-zA-Z0-9_-]+$`）。
 - **防御符号链接越权攻击**：文件拷贝全面拦截符号链接，写入前清理潜在恶意链接，杜绝文件截断。
 - **防御已有技能覆盖损毁**：安装已有技能时自动生成时间戳备份（`*.bak.<timestamp>`），支持无损回退。

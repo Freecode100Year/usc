@@ -55,3 +55,25 @@ func TestCLITargets(t *testing.T) {
 		t.Fatalf("expected code 0 for targets, got %d, out: %s", code, out)
 	}
 }
+
+func TestCLITop(t *testing.T) {
+	out, code := runCLI(t, "top")
+	if code != 0 || !strings.Contains(out, "USC ZERO-TRUST SECURITY DASHBOARD") {
+		t.Fatalf("expected code 0 for top, got %d, out: %s", code, out)
+	}
+}
+
+func TestCLIRunNonExistent(t *testing.T) {
+	out, code := runCLI(t, "run", "missing_artifact.usc")
+	if code != 1 || !strings.Contains(out, "Refusing execution") {
+		t.Fatalf("expected code 1 for missing artifact run, got %d, out: %s", code, out)
+	}
+}
+
+func TestCLIExportNonExistent(t *testing.T) {
+	out, code := runCLI(t, "export", "missing_artifact.usc", "--target", "openclaw")
+	if code != 1 || !strings.Contains(out, "Export rejected") {
+		t.Fatalf("expected code 1 for missing artifact export, got %d, out: %s", code, out)
+	}
+}
+

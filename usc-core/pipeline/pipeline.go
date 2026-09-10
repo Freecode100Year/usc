@@ -47,10 +47,11 @@ func NewPipelineState(skillName, srcDigest string) *PipelineState {
 // RunIngest executes Stage 1: INGEST (10%).
 func (p *PipelineState) RunIngest(sourcePath string) error {
 	p.SourceDir = sourcePath
-	steps, facts := extractIngestMetadata(p.SkillName, sourcePath)
+	steps, facts, desc := extractIngestMetadata(p.SkillName, sourcePath)
 	p.DeclaredIntent = intent.DeclaredIntent{
-		SkillName: p.SkillName,
-		Steps:     steps,
+		SkillName:   p.SkillName,
+		Description: desc,
+		Steps:       steps,
 	}
 	p.ObservedBehavior = intent.NewObservedBehavior(p.SkillName, facts)
 	_, _, err := p.Ledger.Append(audit.StageIngest, "RULE_SOURCE_TAINT", audit.DecisionPass, "Ingested source files under TAINTED_UNTRUSTED")
