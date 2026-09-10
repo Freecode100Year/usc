@@ -14,39 +14,38 @@
 
 ---
 
-## 📋 历史更新日志 [v0.1.2] - 2026-09-10
+## ⚡ 终极极简使用方式：一句话驱动 Agent 自动编译并执行
 
-### ✨ 更新功能 (New Features)
-- **AI Agent 一键自动化安装与依赖自愈 (`install.ps1` / `install.sh`)**：
-  - 新增 Windows PowerShell (`install.ps1`) 与 Linux/macOS (`install.sh`) 自动化无感安装程序。
-  - 自动检测 Go 编译器并构建二进制，自动注入系统全局 `PATH` 环境变量，同时将 USC 自身能力注册为 Agent 本地 Skill，彻底消除依赖配置门槛。
-- **直接支持远程 URL 与 ClawHub 协议 (`usc-core/fetcher`)**：
-  - 原生支持直接传入 ClawHub URL（如 `https://clawhub.ai/...`）、ClawHub 简写标识符（`@owner/skill`）及 GitHub 仓库。
-  - 自动提取上游 API 契约、目的地规范（如 `app.sentisense.ai`）及凭据需求（`SENTISENSE_API_KEY`）。
-- **零外部依赖洁净室运行器 (Zero-Dependency Clean-Room Runner)**：
-  - 洁净室重构脚本默认基于 Python 标准库（`urllib.request` / `json`）实现，**无需执行 `pip install` 引入第三方包**，杜绝因缺少环境依赖导致的崩溃。
-- **全流程一键端到端安装 (`usc install <URL>`)**：
-  - 单行命令打通“远程拉取 -> 7阶段洁净室去污与重构 -> INV-7 权限单调收缩验证 -> Ed25519 机器证明签发 -> 自动部署至本地活跃 Agent”。
-- **Antigravity CLI (agy) 路径精准适配**：
-  - 优先部署至 `~/.gemini/config/skills/` 全局技能发现目录，编译完成后 Agent 即可无感实时载入。
+> 💡 **无需手动下载、无需复杂配置、无需提前分步操作！**  
+> 用户只需在日常聊天中直接引用技能链接，让 Agent “即用即装即执行”：
 
-### 🐛 修正的 Bug (Bug Fixes)
-- 修正技能包部署时文件夹误带 `.usc` 扩展名导致 Agent 无法正确识别技能元数据的问题。
-- 修正多 Agent 运行时共存时的目标侦测逻辑：优先感知识别当前主机环境正在运行的 Agent（如环境变量 `ANTIGRAVITY_AGENT`）。
+### 💬 1. 你对 Agent 说（自然语言一句话）：
+> **“用 https://clawhub.ai/thesentitrader/skills/us-stocks-analysis 帮我查查今天哪3只股票涨幅超过5%”**
+
+### 🤖 2. Agent 在后台全自动闭环交付：
+```
+1. [URL 自动感知]  Agent 识别出提示词中携带的 ClawHub / GitHub 技能链接；
+2. [按需自动编译]  若本地尚未安装该技能，Agent 自动调用 `usc install <URL>`；
+   └── 物理洁净室去污 -> INV-7 权限单调收缩 -> 签发 Ed25519 机器证明包 -> 秒级部署到位
+3. [零依赖可靠运行] 调用纯标准库运行器获取行情、财务与情绪数据；
+4. [专业结果交付]  严格遵循技能定义的 Quick Read / 投资委员会框架，输出高可信结构化简报！
+```
+
+### 💻 3. 如果你在命令行中操作（只需一行）：
+```bash
+# 直接传入 ClawHub 链接、简写标识符（@owner/skill）或 GitHub 仓库：
+usc install https://clawhub.ai/thesentitrader/skills/us-stocks-analysis
+```
 
 ---
 
-## 🤖 AI Agent 自动化执行极简指南 (For AI Agents)
+## 🤖 AI Agent 自动化安装与依赖自愈
 
-USC 让用户与 Agent 之间的技能分发变得前所未有的顺畅。用户只需在聊天框对 Agent 发出自然语言指令：
-
-> **“安装 https://github.com/Freecode100Year/usc 编译 https://clawhub.ai/thesentitrader/skills/us-stocks-analysis 成为本地skill”**
-
-Agent 无需复杂配置，直接按以下两步全自动完成：
+如果你的 Agent 环境尚未安装 USC，仅需以下两步即可完成全套准备：
 
 ### 第 1 步：安装 USC
 ```powershell
-# Windows (PowerShell 一键执行):
+# Windows (PowerShell 一键执行，自动配置 PATH 与 Agent Skill):
 irm https://raw.githubusercontent.com/Freecode100Year/usc/main/install.ps1 | iex
 # 或克隆仓库后执行:
 powershell -ExecutionPolicy Bypass -File .\install.ps1
@@ -58,13 +57,10 @@ go install github.com/Freecode100Year/usc/cmd/usc@latest
 curl -fsSL https://raw.githubusercontent.com/Freecode100Year/usc/main/install.sh | bash
 ```
 
-### 第 2 步：一键安全编译并载入远程技能
+### 第 2 步：载入技能
 ```bash
-# 直接传入 ClawHub 网页 URL、简写标识或 GitHub 仓库均可：
-usc install https://clawhub.ai/thesentitrader/skills/us-stocks-analysis
+usc install <技能URL>
 ```
-
-> 💡 **全自动处理闭环**：USC 会自动拉取远程代码与规范，进入独立物理隔离沙箱执行 7 阶段洁净室去污与重构，完成权限单调收缩（INV-7 证明），签发包含 Ed25519 签名的机器证明包，并将零依赖的原生技能包部署至当前 Agent 技能库！
 
 ---
 
