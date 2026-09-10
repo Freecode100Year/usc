@@ -160,10 +160,9 @@ func (p *PipelineState) RunAttest(distDir string, privKey ed25519.PrivateKey, ke
 }
 
 func emitRealProofAndPackage(distDir string, p *PipelineState, privKey ed25519.PrivateKey, keyID string) error {
-	payloadDir := p.SourceDir
-	if payloadDir == "" || !isDir(payloadDir) {
-		payloadDir = filepath.Join(distDir, "proof")
-		_ = os.MkdirAll(payloadDir, 0755)
+	payloadDir := filepath.Join(distDir, "payload")
+	if err := prepareArtifactPayload(p, payloadDir); err != nil {
+		return err
 	}
 	payloadHash, err := attestation.ComputeDirSHA256(payloadDir)
 	if err != nil {

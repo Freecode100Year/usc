@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -34,3 +35,32 @@ func writeProofFiles(proofDir string, p *PipelineState) error {
 	_ = os.WriteFile(filepath.Join(proofDir, "sbom.spdx.json"), []byte(`{"spdxVersion":"SPDX-2.3"}`), 0644)
 	return nil
 }
+
+func prepareArtifactPayload(p *PipelineState, payloadDir string) error {
+	_ = os.RemoveAll(payloadDir)
+	if err := os.MkdirAll(payloadDir, 0755); err != nil {
+		return err
+	}
+	if p.SourceDir != "" && isDir(p.SourceDir) {
+		return copyDirFiles(p.SourceDir, payloadDir)
+	}
+	content := fmt.Sprintf("# %s\n\n%s\n", p.SkillName, p.DeclaredIntent.Description)
+	return os.WriteFile(filepath.Join(payloadDir, "SKILL.md"), []byte(content), 0644)
+}
+
+func copyDirFiles(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return err
+		}
+		rel, _ := filepath.Rel(src, path)
+		target := filepath.Join(dst, rel)
+		_ = os.MkdirAll(filepath.Dir(target), 0755)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(target, data, info.Mode())
+	})
+}
+

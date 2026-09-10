@@ -128,7 +128,15 @@ func executeBuildPipeline(source, target string, install bool) string {
 
 func prepareBuildSource(source string) (string, string, func()) {
 	if !fetcher.IsRemoteSource(source) {
-		abs, _ := filepath.Abs(source)
+		abs, err := filepath.Abs(source)
+		if err != nil {
+			fmt.Printf("Error: Invalid source path %s: %v\n", source, err)
+			os.Exit(1)
+		}
+		if _, err := os.Stat(abs); err != nil {
+			fmt.Printf("Error: Source path not found: %s\n", source)
+			os.Exit(1)
+		}
 		return abs, filepath.Base(abs), nil
 	}
 	tmpDir, err := os.MkdirTemp("", "usc-src-*")
